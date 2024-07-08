@@ -7,5 +7,5 @@ data class SMSData(
     val number: String,
     val message: String,
     val multiPartSMS: MutableList<String> = mutableListOf(),
-    var tryCounter: Int = 0,
+    var attemptCounter: Int = 0,
 )

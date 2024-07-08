@@ -59,6 +59,7 @@ fun SMSenderLibraryUi(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
+                enabled = !isSendingSMS,
                 label = { Text(text = "Telephone") },
                 value = textFieldNumber,
                 onValueChange = { newTextField: String ->
@@ -77,6 +78,7 @@ fun SMSenderLibraryUi(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
+                enabled = !isSendingSMS,
                 label = { Text(text = "Message") },
                 value = textFieldMessage,
                 onValueChange = { newTextField: String ->
@@ -87,7 +89,7 @@ fun SMSenderLibraryUi(
             TextButton(modifier = Modifier
                 .fillMaxWidth()
                 .padding(32.dp),
-                enabled = !isSendingSMS,
+                enabled = !isSendingSMS && textFieldNumber.length >= 10 && textFieldMessage.isNotEmpty(),
                 onClick = { onSendSMSBtnClick(textFieldNumber, textFieldMessage) }) {
                 Text(text = "Send SMS")
             }
