@@ -116,3 +116,6 @@ smsSender.onSMStatusChanged { smsId, partNumber, totalParts, newStatus ->
     }
 }
 ```
+
+## How to install in your App:
+[![](https://jitpack.io/v/AguilasBuildingCode/SMSenderLibrary.svg)](https://jitpack.io/#AguilasBuildingCode/SMSenderLibrary)
