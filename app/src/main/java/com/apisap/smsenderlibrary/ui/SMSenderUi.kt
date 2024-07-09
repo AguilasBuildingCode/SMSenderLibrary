@@ -8,10 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -35,6 +31,7 @@ import com.apisap.smsenderlibrary.ui.theme.SMSenderLibraryTheme
 @Composable
 fun SMSenderLibraryUi(
     modifier: Modifier = Modifier,
+    isSendingSMS: Boolean,
     onSendSMSBtnClick: (telephone: String, message: String) -> Unit
 ) {
     var textFieldNumber by remember { mutableStateOf("") }
@@ -62,12 +59,11 @@ fun SMSenderLibraryUi(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
+                enabled = !isSendingSMS,
                 label = { Text(text = "Telephone") },
                 value = textFieldNumber,
                 onValueChange = { newTextField: String ->
-                    if (newTextField.isNotEmpty() && newTextField.length <= 10 && newTextField.matches(
-                            Regex("^\\d+\$")
-                        )
+                    if (newTextField.isEmpty() || newTextField.length <= 10 && newTextField.matches(Regex("^\\d+\$"))
                     ) {
                         textFieldNumber = newTextField
                     }
@@ -80,6 +76,7 @@ fun SMSenderLibraryUi(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
+                enabled = !isSendingSMS,
                 label = { Text(text = "Message") },
                 value = textFieldMessage,
                 onValueChange = { newTextField: String ->
@@ -90,6 +87,7 @@ fun SMSenderLibraryUi(
             TextButton(modifier = Modifier
                 .fillMaxWidth()
                 .padding(32.dp),
+                enabled = !isSendingSMS && textFieldNumber.length >= 10 && textFieldMessage.isNotEmpty(),
                 onClick = { onSendSMSBtnClick(textFieldNumber, textFieldMessage) }) {
                 Text(text = "Send SMS")
             }
@@ -108,6 +106,7 @@ fun GreetingPreview() {
                 end = 0.0.dp,
                 bottom = 14.933333.dp
             ),
+            isSendingSMS = false,
             onSendSMSBtnClick = { _, _ -> }
         )
     }
