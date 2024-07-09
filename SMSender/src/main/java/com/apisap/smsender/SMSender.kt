@@ -22,12 +22,14 @@ private const val SMS_SEND_ACTION: String = "SMS_SEND_ACTION"
 private const val SMS_DELIVERED_ACTION: String = "SMS_DELIVERED_ACTION"
 private const val SMS_ID_INTENT_EXTRA: String = "SMS_ID_INTENT_EXTRA"
 private const val SMS_PART_NUMBER_INTENT_EXTRA: String = "SMS_PART_INTENT_EXTRA"
+private const val SMS_TOTAL_PARTS_INTENT_EXTRA: String = "SMS_TOTAL_PARTS_INTENT_EXTRA"
 private const val SMS_ATTEMPT_COUNTER_INTENT_EXTRA: String = "SMS_TRY_COUNTER_INTENT_EXTRA"
 
 open class SMSender(private val context: Context) {
 
     private var job: Job? = null
     private var isSenderRunning: Boolean = false
+    private var isSendingSMS: Boolean = false
     private val coroutineScope by lazy { CoroutineScope(Job() + Dispatchers.IO) }
     private val smsManager: SmsManager by lazy { context.getSystemService(SmsManager::class.java) }
     private val smsData: MutableMap<String, SMSData> = mutableMapOf()
@@ -35,7 +37,7 @@ open class SMSender(private val context: Context) {
 
     private var policy: SMSenderPolicy = SMSenderPolicy()
 
-    private var smsStatusChangedCallback: ((smsId: String, partNumber: Int, newState: SMStatus) -> Unit)? =
+    private var smsStatusChangedCallback: ((smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit)? =
         null
 
     private val sentBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -44,12 +46,14 @@ open class SMSender(private val context: Context) {
                 safeIntent.getStringExtra(SMS_ID_INTENT_EXTRA)?.let { smsId ->
                     val attemptCounter = safeIntent.getIntExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, 0)
                     val partNumber = safeIntent.getIntExtra(SMS_PART_NUMBER_INTENT_EXTRA, 0)
+                    val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 0)
                     when (resultCode) {
                         AppCompatActivity.RESULT_OK -> {
                             this@SMSender.smsStatusChangedCallback?.let {
                                 it(
                                     smsId,
                                     partNumber,
+                                    totalParts,
                                     SMStatus.SEND
                                 )
                             }
@@ -62,6 +66,7 @@ open class SMSender(private val context: Context) {
                                     it(
                                         smsId,
                                         partNumber,
+                                        totalParts,
                                         SMStatus.FAIL.setRefCode(refCode = resultCode)
                                     )
                                 }
@@ -71,9 +76,12 @@ open class SMSender(private val context: Context) {
                             smsStack.add(0, smsId)
                         }
                     }
+                    if (totalParts <= (partNumber + 1)) {
+                        isSendingSMS = false
+                        this@SMSender.context.unregisterReceiver(this)
+                    }
                 }
             }
-
         }
     }
 
@@ -83,6 +91,7 @@ open class SMSender(private val context: Context) {
                 safeIntent.getStringExtra(SMS_ID_INTENT_EXTRA)?.let { smsId ->
                     val attemptCounter = safeIntent.getIntExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, 0)
                     val partNumber = safeIntent.getIntExtra(SMS_PART_NUMBER_INTENT_EXTRA, 0)
+                    val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 0)
                     when (resultCode) {
                         AppCompatActivity.RESULT_OK -> {
                             smsData.remove(smsId)
@@ -90,6 +99,7 @@ open class SMSender(private val context: Context) {
                                 it(
                                     smsId,
                                     partNumber,
+                                    totalParts,
                                     SMStatus.DELIVERED
                                 )
                             }
@@ -102,6 +112,7 @@ open class SMSender(private val context: Context) {
                                     it(
                                         smsId,
                                         partNumber,
+                                        totalParts,
                                         SMStatus.FAIL.setRefCode(refCode = resultCode)
                                     )
                                 }
@@ -110,6 +121,10 @@ open class SMSender(private val context: Context) {
                             smsData[smsId]?.attemptCounter = attemptCounter + 1
                             smsStack.add(0, smsId)
                         }
+                    }
+                    if (totalParts <= (partNumber + 1)) {
+                        isSendingSMS = false
+                        this@SMSender.context.unregisterReceiver(this)
                     }
                 }
             }
@@ -120,7 +135,7 @@ open class SMSender(private val context: Context) {
         this.policy = policy
     }
 
-    fun setOnSMStatusChanged(smsStatusChangedCallback: (smsId: String, partNumber: Int, newState: SMStatus) -> Unit) {
+    fun setOnSMStatusChanged(smsStatusChangedCallback: (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit) {
         this.smsStatusChangedCallback = smsStatusChangedCallback
     }
 
@@ -152,7 +167,8 @@ open class SMSender(private val context: Context) {
         isSenderRunning = true
         job = coroutineScope.launch {
             while (isSenderRunning) {
-                if (smsStack.isNotEmpty()) {
+                if (smsStack.isNotEmpty() and !isSendingSMS) {
+                    isSendingSMS = true
                     val smsId = smsStack.removeFirst()
                     smsData[smsId]?.let { (countryCode, number, message, multiPartSMS, attemptCounter): SMSData ->
                         try {
@@ -170,7 +186,14 @@ open class SMSender(private val context: Context) {
                                             Intent("$SMS_SEND_ACTION-$smsAction").apply {
                                                 putExtra(SMS_ID_INTENT_EXTRA, smsId)
                                                 putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
-                                                putExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, attemptCounter)
+                                                putExtra(
+                                                    SMS_TOTAL_PARTS_INTENT_EXTRA,
+                                                    multiPartSMS.size
+                                                )
+                                                putExtra(
+                                                    SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                                                    attemptCounter
+                                                )
                                             }, PendingIntent.FLAG_IMMUTABLE
                                         )
                                     } as ArrayList<PendingIntent>?,
@@ -181,7 +204,14 @@ open class SMSender(private val context: Context) {
                                             Intent("$SMS_DELIVERED_ACTION-$smsAction").apply {
                                                 putExtra(SMS_ID_INTENT_EXTRA, smsId)
                                                 putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
-                                                putExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, attemptCounter)
+                                                putExtra(
+                                                    SMS_TOTAL_PARTS_INTENT_EXTRA,
+                                                    multiPartSMS.size
+                                                )
+                                                putExtra(
+                                                    SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                                                    attemptCounter
+                                                )
                                             }, PendingIntent.FLAG_IMMUTABLE
                                         )
                                     } as ArrayList<PendingIntent>?
@@ -197,23 +227,31 @@ open class SMSender(private val context: Context) {
                                         context, 0,
                                         Intent("$SMS_SEND_ACTION-$smsAction").apply {
                                             putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                                            putExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, attemptCounter)
+                                            putExtra(
+                                                SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                                                attemptCounter
+                                            )
                                         }, PendingIntent.FLAG_IMMUTABLE
                                     ),
                                     PendingIntent.getBroadcast(
                                         context, 0,
                                         Intent("$SMS_DELIVERED_ACTION-$smsAction").apply {
                                             putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                                            putExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, attemptCounter)
+                                            putExtra(
+                                                SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                                                attemptCounter
+                                            )
                                         }, PendingIntent.FLAG_IMMUTABLE
                                     )
                                 )
                             }
                         } catch (e: IllegalArgumentException) {
                             e.printStackTrace()
+                            isSendingSMS = false
                             smsStatusChangedCallback?.let {
                                 it(
                                     smsId,
+                                    -1,
                                     -1,
                                     SMStatus.FAIL.setRefCode(refCode = -1)
                                 )
@@ -246,10 +284,16 @@ open class SMSender(private val context: Context) {
         return uuid
     }
 
+    fun sendSMS(
+        countryCode: CountriesCodes,
+        number: String,
+        messages: List<String>,
+    ): List<String> {
+        return messages.map { message -> sendSMS(countryCode, number, message) }
+    }
+
     fun stopSender() {
         isSenderRunning = false
         job?.cancel()
-        context.unregisterReceiver(sentBroadcastReceiver)
-        context.unregisterReceiver(deliveredBroadcastReceiver)
     }
 }

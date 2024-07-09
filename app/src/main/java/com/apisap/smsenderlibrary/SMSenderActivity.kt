@@ -3,6 +3,7 @@ package com.apisap.smsenderlibrary
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,21 +51,23 @@ class SMSenderActivity : ComponentActivity() {
                                         lifecycleScope.launch {
                                             viewModel.disableSendSMSBtn().await()
                                             delay(1000)
-                                            val smsId = smsSender.sendSMS(
+                                            val smsIds = smsSender.sendSMS(
                                                 CountriesCodes.MX,
                                                 telephone,
-                                                message
+                                                listOf(message, message, message)
                                             )
-                                            Toast.makeText(
-                                                this@SMSenderActivity,
-                                                "New SMS created: $smsId",
-                                                Toast.LENGTH_LONG
-                                            ).show()
+                                            smsIds.forEach { smsId ->
+                                                Log.i("** $TAG", "New SMS created: $smsId")
+                                                Toast.makeText(
+                                                    this@SMSenderActivity,
+                                                    "New SMS created: $smsId",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
                                         }
                                     }
                                 )
                             }
-
                         }
                     }
                 }
@@ -93,19 +96,25 @@ class SMSenderActivity : ComponentActivity() {
             }
         }
 
-        smsSender.setOnSMStatusChanged { smsId, partNumber, newState ->
+        smsSender.setOnSMStatusChanged { smsId, partNumber, totalParts, newState ->
             lifecycleScope.launch {
-                when (newState) {
-                    SMStatus.SEND -> {}
-                    SMStatus.FAIL -> viewModel.enableSendSMSBtn().await()
-                    SMStatus.DELIVERED -> viewModel.enableSendSMSBtn().await()
+                if (totalParts <= (partNumber + 1)) {
+                    when (newState) {
+                        SMStatus.SEND -> {}
+                        SMStatus.FAIL -> viewModel.enableSendSMSBtn().await()
+                        SMStatus.DELIVERED -> viewModel.enableSendSMSBtn().await()
+                    }
+                    Toast.makeText(
+                        this@SMSenderActivity,
+                        "SMS: $smsId Status: ${newState.name}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
-            Toast.makeText(
-                this,
-                "SMS: $smsId Part: $partNumber Status: ${newState.name}",
-                Toast.LENGTH_LONG
-            ).show()
+            Log.i(
+                "** $TAG",
+                "SMS: $smsId Part: $partNumber Total Parts: $totalParts Status: ${newState.name}"
+            )
         }
     }
 

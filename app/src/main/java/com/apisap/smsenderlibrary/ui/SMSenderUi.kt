@@ -63,9 +63,7 @@ fun SMSenderLibraryUi(
                 label = { Text(text = "Telephone") },
                 value = textFieldNumber,
                 onValueChange = { newTextField: String ->
-                    if (newTextField.isNotEmpty() && newTextField.length <= 10 && newTextField.matches(
-                            Regex("^\\d+\$")
-                        )
+                    if (newTextField.isEmpty() || newTextField.length <= 10 && newTextField.matches(Regex("^\\d+\$"))
                     ) {
                         textFieldNumber = newTextField
                     }
