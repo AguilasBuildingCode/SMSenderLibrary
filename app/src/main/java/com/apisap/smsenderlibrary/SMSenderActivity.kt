@@ -96,7 +96,7 @@ class SMSenderActivity : ComponentActivity() {
             }
         }
 
-        smsSender.setOnSMStatusChanged { smsId, partNumber, totalParts, newState ->
+        smsSender.onSMStatusChanged { smsId, partNumber, totalParts, newState ->
             lifecycleScope.launch {
                 if (totalParts <= (partNumber + 1)) {
                     when (newState) {

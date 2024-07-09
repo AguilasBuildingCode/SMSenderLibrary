@@ -18,13 +18,58 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/**
+ * [SMS_SEND_ACTION] used as first part of action to register receiver and send SMS with [IntentFilter]
+ * in send.
+ */
+
 private const val SMS_SEND_ACTION: String = "SMS_SEND_ACTION"
+
+/**
+ * [SMS_DELIVERED_ACTION] used as first part of action to register receiver and send SMS with [IntentFilter]
+ * in delivery.
+ */
 private const val SMS_DELIVERED_ACTION: String = "SMS_DELIVERED_ACTION"
+
+/**
+ * [SMS_ID_INTENT_EXTRA] used as key to pass SMSId to send and delivery [BroadcastReceiver].
+ */
 private const val SMS_ID_INTENT_EXTRA: String = "SMS_ID_INTENT_EXTRA"
+
+/**
+ * [SMS_PART_NUMBER_INTENT_EXTRA] used as key to pass part number to send and delivery [BroadcastReceiver].
+ * Apply in multi part SMS.
+ */
 private const val SMS_PART_NUMBER_INTENT_EXTRA: String = "SMS_PART_INTENT_EXTRA"
+
+/**
+ * [SMS_TOTAL_PARTS_INTENT_EXTRA] used as key to pass total of parts to send and delivery [BroadcastReceiver].
+ * Apply in multi part SMS.
+ */
 private const val SMS_TOTAL_PARTS_INTENT_EXTRA: String = "SMS_TOTAL_PARTS_INTENT_EXTRA"
+
+/**
+ * [SMS_ATTEMPT_COUNTER_INTENT_EXTRA] used as key to pass attempts counter to send and delivery [BroadcastReceiver].
+ * Check [SMSenderPolicy].
+ */
 private const val SMS_ATTEMPT_COUNTER_INTENT_EXTRA: String = "SMS_TRY_COUNTER_INTENT_EXTRA"
 
+/**
+ * [SMSender] provide the functionality to send SMS.
+ *
+ * @param [context][Context]
+ *
+ * @property private [job][Job]
+ * @property private [isSenderRunning][Boolean]
+ * @property private [isSendingSMS][Boolean]
+ * @property private [coroutineScope][CoroutineScope]
+ * @property private [smsManager][SmsManager]
+ * @property private [smsData][MutableMap]
+ * @property private [smsStack][MutableList]
+ * @property private [policy][SMSenderPolicy]
+ * @property private [smsStatusChangedCallback] (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit
+ *
+ */
 open class SMSender(private val context: Context) {
 
     private var job: Job? = null
@@ -131,11 +176,25 @@ open class SMSender(private val context: Context) {
         }
     }
 
+    /**
+     * [setPolicy] used to change default [SMSenderPolicy], by default:
+     * [SMSenderPolicy.maxAttempts] = 3
+     * [SMSenderPolicy.delayInterval] = 5000
+     *
+     * @return [Unit]
+     */
     fun setPolicy(policy: SMSenderPolicy) {
         this.policy = policy
     }
 
-    fun setOnSMStatusChanged(smsStatusChangedCallback: (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit) {
+    /**
+     * [onSMStatusChanged] used to set new [smsStatusChangedCallback].
+     *
+     * @param [smsStatusChangedCallback] (smsId: [String], partNumber: [Int], totalParts: [Int], newState: [SMStatus]) -> [Unit]
+     *
+     * @return [Unit]
+     */
+    fun onSMStatusChanged(smsStatusChangedCallback: (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit) {
         this.smsStatusChangedCallback = smsStatusChangedCallback
     }
 
@@ -244,6 +303,11 @@ open class SMSender(private val context: Context) {
         return smsDeliveredAction
     }
 
+    /**
+     * [startSender] used to start SMS send process.
+     *
+     * @return [Unit]
+     */
     fun startSender() {
         isSenderRunning = true
         job = coroutineScope.launch {
@@ -301,11 +365,25 @@ open class SMSender(private val context: Context) {
         }
     }
 
+    /**
+     * [sendSMS] used to send a SMS.
+     *
+     * @param [countryCode][CountriesCodes] define country origin by Country Code (XX)
+     * @param [number][String] telephone number (10 digits)
+     * @param [message][String] message to send.
+     *
+     * @throws IllegalArgumentException if number has more or less 10 digits.
+     *
+     * @return uuid: [String]
+     */
     fun sendSMS(
         countryCode: CountriesCodes,
         number: String,
         message: String,
     ): String {
+        if (number.length != 10) {
+            throw IllegalArgumentException("Param number should be 10 digits but given ${number.length} digits")
+        }
         val uuid: String = UUID.randomUUID().toString()
         try {
             smsData[uuid] = SMSData(
@@ -321,6 +399,17 @@ open class SMSender(private val context: Context) {
         return uuid
     }
 
+    /**
+     * [sendSMS] used to send many SMSs.
+     *
+     * @param [countryCode][CountriesCodes] define country origin by Country Code (XX)
+     * @param [number][String] telephone number (10 digits)
+     * @param [messages][List]<[String]> messages to send.
+     *
+     * @throws IllegalArgumentException if number has more or less 10 digits.
+     *
+     * @return uuid: [String]
+     */
     fun sendSMS(
         countryCode: CountriesCodes,
         number: String,
@@ -329,6 +418,20 @@ open class SMSender(private val context: Context) {
         return messages.map { message -> sendSMS(countryCode, number, message) }
     }
 
+    /**
+     * [getSMSPendingToSend] used to know how many SMS are there pending to send.
+     *
+     * @return uuids [List]<[String]>
+     */
+    fun getSMSPendingToSend(): List<String> {
+        return smsStack.toList()
+    }
+
+    /**
+     * [stopSender] used to stop SMS send process. Could be SMS pending to send.
+     *
+     * @return [Unit]
+     */
     fun stopSender() {
         isSenderRunning = false
         job?.cancel()
