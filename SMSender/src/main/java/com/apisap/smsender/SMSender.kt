@@ -60,7 +60,7 @@ open class SMSender(private val context: Context) {
                         }
 
                         else -> {
-                            if (attemptCounter >= policy.maxNumberOfAttempt) {
+                            if (attemptCounter >= policy.maxAttempts) {
                                 smsData.remove(smsId)
                                 this@SMSender.smsStatusChangedCallback?.let {
                                     it(
@@ -106,7 +106,7 @@ open class SMSender(private val context: Context) {
                         }
 
                         else -> {
-                            if (attemptCounter >= policy.maxNumberOfAttempt) {
+                            if (attemptCounter >= policy.maxAttempts) {
                                 smsData.remove(smsId)
                                 this@SMSender.smsStatusChangedCallback?.let {
                                     it(
@@ -139,28 +139,109 @@ open class SMSender(private val context: Context) {
         this.smsStatusChangedCallback = smsStatusChangedCallback
     }
 
-    private fun registerReceiver(smsId: String) {
-        val smsSendAction = "$SMS_SEND_ACTION-$smsId"
-        val smsDeliveredAction = "$SMS_DELIVERED_ACTION-$smsId"
+    private fun registerSendReceiver(
+        multiPartSMSSize: Int,
+        smsId: String,
+        attempt: Int
+    ): ArrayList<PendingIntent> {
+        return List(multiPartSMSSize) { index ->
+            return@List PendingIntent.getBroadcast(
+                context, 0,
+                Intent(registerSendReceiver(smsData = "smsId-$smsId-attempt-$attempt-part-$index")).apply {
+                    putExtra(SMS_ID_INTENT_EXTRA, smsId)
+                    putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
+                    putExtra(
+                        SMS_TOTAL_PARTS_INTENT_EXTRA,
+                        multiPartSMSSize
+                    )
+                    putExtra(
+                        SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                        attempt
+                    )
+                }, PendingIntent.FLAG_IMMUTABLE
+            )
+        } as ArrayList<PendingIntent>
+    }
+
+    private fun registerSendReceiver(smsId: String, attempt: Int): PendingIntent {
+        return PendingIntent.getBroadcast(
+            context, 0,
+            Intent(registerSendReceiver(smsData = "smsId-$smsId-attempt-$attempt")).apply {
+                putExtra(SMS_ID_INTENT_EXTRA, smsId)
+                putExtra(
+                    SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                    attempt
+                )
+            }, PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun registerSendReceiver(smsData: String): String {
+        val smsSendAction = "$SMS_SEND_ACTION-$smsData"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(
                 sentBroadcastReceiver, IntentFilter(smsSendAction),
                 Context.RECEIVER_EXPORTED
             )
-
-            context.registerReceiver(
-                deliveredBroadcastReceiver, IntentFilter(smsDeliveredAction),
-                Context.RECEIVER_EXPORTED
-            )
-            return
+            return smsSendAction
         }
         context.registerReceiver(
             sentBroadcastReceiver, IntentFilter(smsSendAction)
         )
+        return smsSendAction
+    }
+
+    private fun registerDeliveryReceiver(
+        multiPartSMSSize: Int,
+        smsId: String,
+        attempt: Int,
+    ): ArrayList<PendingIntent> {
+        return List(multiPartSMSSize) { index ->
+            return@List PendingIntent.getBroadcast(
+                context, 0,
+                Intent(registerDeliveryReceiver(smsData = "smsId-$smsId-attempt-$attempt-part-$index")).apply {
+                    putExtra(SMS_ID_INTENT_EXTRA, smsId)
+                    putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
+                    putExtra(
+                        SMS_TOTAL_PARTS_INTENT_EXTRA,
+                        multiPartSMSSize
+                    )
+                    putExtra(
+                        SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                        attempt
+                    )
+                }, PendingIntent.FLAG_IMMUTABLE
+            )
+        } as ArrayList<PendingIntent>
+    }
+
+    private fun registerDeliveryReceiver(smsId: String, attempt: Int): PendingIntent {
+        return PendingIntent.getBroadcast(
+            context, 0,
+            Intent(registerDeliveryReceiver(smsData = "smsId-$smsId-attempt-$attempt")).apply {
+                putExtra(SMS_ID_INTENT_EXTRA, smsId)
+                putExtra(
+                    SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
+                    attempt
+                )
+            }, PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun registerDeliveryReceiver(smsData: String): String {
+        val smsDeliveredAction = "$SMS_DELIVERED_ACTION-$smsData"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(
+                deliveredBroadcastReceiver, IntentFilter(smsDeliveredAction),
+                Context.RECEIVER_EXPORTED
+            )
+            return smsDeliveredAction
+        }
 
         context.registerReceiver(
             deliveredBroadcastReceiver, IntentFilter(smsDeliveredAction)
         )
+        return smsDeliveredAction
     }
 
     fun startSender() {
@@ -177,71 +258,27 @@ open class SMSender(private val context: Context) {
                                 smsManager.sendMultipartTextMessage(
                                     destinationAddress,
                                     null,
-                                    multiPartSMS as ArrayList<String>?,
-                                    List(multiPartSMS.size) { index ->
-                                        val smsAction = "$smsId-attempt-$attemptCounter-i-$index"
-                                        registerReceiver(smsId = smsAction)
-                                        return@List PendingIntent.getBroadcast(
-                                            context, 0,
-                                            Intent("$SMS_SEND_ACTION-$smsAction").apply {
-                                                putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                                                putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
-                                                putExtra(
-                                                    SMS_TOTAL_PARTS_INTENT_EXTRA,
-                                                    multiPartSMS.size
-                                                )
-                                                putExtra(
-                                                    SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
-                                                    attemptCounter
-                                                )
-                                            }, PendingIntent.FLAG_IMMUTABLE
-                                        )
-                                    } as ArrayList<PendingIntent>?,
-                                    List(multiPartSMS.size) { index ->
-                                        val smsAction = "$smsId-attempt-$attemptCounter-i-$index"
-                                        return@List PendingIntent.getBroadcast(
-                                            context, 0,
-                                            Intent("$SMS_DELIVERED_ACTION-$smsAction").apply {
-                                                putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                                                putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
-                                                putExtra(
-                                                    SMS_TOTAL_PARTS_INTENT_EXTRA,
-                                                    multiPartSMS.size
-                                                )
-                                                putExtra(
-                                                    SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
-                                                    attemptCounter
-                                                )
-                                            }, PendingIntent.FLAG_IMMUTABLE
-                                        )
-                                    } as ArrayList<PendingIntent>?
+                                    multiPartSMS,
+                                    registerSendReceiver(
+                                        multiPartSMSSize = multiPartSMS.size,
+                                        smsId = smsId,
+                                        attempt = attemptCounter
+                                    ),
+                                    registerDeliveryReceiver(
+                                        multiPartSMSSize = multiPartSMS.size,
+                                        smsId = smsId,
+                                        attempt = attemptCounter,
+                                    )
                                 )
                             } else {
-                                val smsAction = "$smsId-attempt-$attemptCounter"
-                                registerReceiver(smsId = smsAction)
                                 smsManager.sendTextMessage(
                                     destinationAddress,
                                     null,
                                     message,
-                                    PendingIntent.getBroadcast(
-                                        context, 0,
-                                        Intent("$SMS_SEND_ACTION-$smsAction").apply {
-                                            putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                                            putExtra(
-                                                SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
-                                                attemptCounter
-                                            )
-                                        }, PendingIntent.FLAG_IMMUTABLE
-                                    ),
-                                    PendingIntent.getBroadcast(
-                                        context, 0,
-                                        Intent("$SMS_DELIVERED_ACTION-$smsAction").apply {
-                                            putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                                            putExtra(
-                                                SMS_ATTEMPT_COUNTER_INTENT_EXTRA,
-                                                attemptCounter
-                                            )
-                                        }, PendingIntent.FLAG_IMMUTABLE
+                                    registerSendReceiver(smsId = smsId, attempt = attemptCounter),
+                                    registerDeliveryReceiver(
+                                        smsId = smsId,
+                                        attempt = attemptCounter
                                     )
                                 )
                             }
