@@ -9,6 +9,7 @@ import android.os.Build
 import android.telephony.SmsManager
 import androidx.appcompat.app.AppCompatActivity
 import com.apisap.smsender.countries.CountriesCodes
+import com.apisap.smsender.policies.SMSenderPolicy
 import com.apisap.smsender.states.SMSData
 import com.apisap.smsender.states.SMStatus
 import kotlinx.coroutines.CoroutineScope
@@ -85,7 +86,10 @@ open class SMSender(private val context: Context) {
     private var smsStatusChangedCallback: ((smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit)? =
         null
 
-    private val sentBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+    /**
+     * [sendBroadcastReceiver] used to ear send SMS Status.
+     */
+    private val sendBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { safeIntent ->
                 safeIntent.getStringExtra(SMS_ID_INTENT_EXTRA)?.let { smsId ->
@@ -130,6 +134,9 @@ open class SMSender(private val context: Context) {
         }
     }
 
+    /**
+     * [deliveredBroadcastReceiver] used to ear delivery SMS Status.
+     */
     private val deliveredBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { safeIntent ->
@@ -198,6 +205,16 @@ open class SMSender(private val context: Context) {
         this.smsStatusChangedCallback = smsStatusChangedCallback
     }
 
+    /**
+     * [registerSendReceiver] used to register [sendBroadcastReceiver] and get all [PendingIntent]s to ear send status.
+     *
+     * @param [multiPartSMSSize][Int] size of [SMSData.multiPartSMS] to know number of parts to generate [PendingIntent] for
+     * each part.
+     * @param [smsId][String] uuid of SMS.
+     * @param [attempt][Int] number of attempts.
+     *
+     * @return [ArrayList]<[PendingIntent]>
+     */
     private fun registerSendReceiver(
         multiPartSMSSize: Int,
         smsId: String,
@@ -222,6 +239,14 @@ open class SMSender(private val context: Context) {
         } as ArrayList<PendingIntent>
     }
 
+    /**
+     * [registerSendReceiver] used to register [sendBroadcastReceiver] and get [PendingIntent] to ear send status.
+     *
+     * @param [smsId][String] uuid of SMS.
+     * @param [attempt][Int] number of attempts.
+     *
+     * @return [PendingIntent]
+     */
     private fun registerSendReceiver(smsId: String, attempt: Int): PendingIntent {
         return PendingIntent.getBroadcast(
             context, 0,
@@ -235,21 +260,38 @@ open class SMSender(private val context: Context) {
         )
     }
 
+    /**
+     * [registerSendReceiver] used to register [sendBroadcastReceiver] and get [Intent] action.
+     *
+     * @param [smsData][String] data of SMS in [String] mode.
+     *
+     * @return action [String]
+     */
     private fun registerSendReceiver(smsData: String): String {
         val smsSendAction = "$SMS_SEND_ACTION-$smsData"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(
-                sentBroadcastReceiver, IntentFilter(smsSendAction),
+                sendBroadcastReceiver, IntentFilter(smsSendAction),
                 Context.RECEIVER_EXPORTED
             )
             return smsSendAction
         }
         context.registerReceiver(
-            sentBroadcastReceiver, IntentFilter(smsSendAction)
+            sendBroadcastReceiver, IntentFilter(smsSendAction)
         )
         return smsSendAction
     }
 
+    /**
+     * [registerSendReceiver] used to register [deliveredBroadcastReceiver] and get all [PendingIntent]s to ear delivery status.
+     *
+     * @param [multiPartSMSSize][Int] size of [SMSData.multiPartSMS] to know number of parts to generate [PendingIntent] for
+     * each part.
+     * @param [smsId][String] uuid of SMS.
+     * @param [attempt][Int] number of attempts.
+     *
+     * @return [ArrayList]<[PendingIntent]>
+     */
     private fun registerDeliveryReceiver(
         multiPartSMSSize: Int,
         smsId: String,
@@ -274,6 +316,14 @@ open class SMSender(private val context: Context) {
         } as ArrayList<PendingIntent>
     }
 
+    /**
+     * [registerSendReceiver] used to register [deliveredBroadcastReceiver] and get [PendingIntent] to ear delivery status.
+     *
+     * @param [smsId][String] uuid of SMS.
+     * @param [attempt][Int] number of attempts.
+     *
+     * @return [PendingIntent]
+     */
     private fun registerDeliveryReceiver(smsId: String, attempt: Int): PendingIntent {
         return PendingIntent.getBroadcast(
             context, 0,
@@ -287,6 +337,13 @@ open class SMSender(private val context: Context) {
         )
     }
 
+    /**
+     * [registerDeliveryReceiver] used to register [deliveredBroadcastReceiver] and get [Intent] action.
+     *
+     * @param [smsData][String] data of SMS in [String] mode.
+     *
+     * @return action [String]
+     */
     private fun registerDeliveryReceiver(smsData: String): String {
         val smsDeliveredAction = "$SMS_DELIVERED_ACTION-$smsData"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

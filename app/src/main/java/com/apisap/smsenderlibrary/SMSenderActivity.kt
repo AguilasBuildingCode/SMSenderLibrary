@@ -51,19 +51,17 @@ class SMSenderActivity : ComponentActivity() {
                                         lifecycleScope.launch {
                                             viewModel.disableSendSMSBtn().await()
                                             delay(1000)
-                                            val smsIds = smsSender.sendSMS(
+                                            val smsId = smsSender.sendSMS(
                                                 CountriesCodes.MX,
                                                 telephone,
-                                                listOf(message, message, message)
+                                                message
                                             )
-                                            smsIds.forEach { smsId ->
-                                                Log.i("** $TAG", "New SMS created: $smsId")
-                                                Toast.makeText(
-                                                    this@SMSenderActivity,
-                                                    "New SMS created: $smsId",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            }
+                                            Log.i("** $TAG", "New SMS created: $smsId")
+                                            Toast.makeText(
+                                                this@SMSenderActivity,
+                                                "New SMS created: $smsId",
+                                                Toast.LENGTH_LONG
+                                            ).show()
                                         }
                                     }
                                 )

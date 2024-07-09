@@ -1,4 +1,4 @@
-package com.apisap.smsender
+package com.apisap.smsender.policies
 
 /**
  * [SMSenderPolicy] used to define [delayInterval] and [maxAttempts].
