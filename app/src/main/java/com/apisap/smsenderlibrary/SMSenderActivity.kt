@@ -94,24 +94,24 @@ class SMSenderActivity : ComponentActivity() {
             }
         }
 
-        smsSender.onSMStatusChanged { smsId, partNumber, totalParts, newState ->
+        smsSender.onSMStatusChanged { smsId, partNumber, totalParts, newStatus ->
             lifecycleScope.launch {
                 if (totalParts <= (partNumber + 1)) {
-                    when (newState) {
+                    when (newStatus) {
                         SMStatus.SEND -> {}
                         SMStatus.FAIL -> viewModel.enableSendSMSBtn().await()
                         SMStatus.DELIVERED -> viewModel.enableSendSMSBtn().await()
                     }
                     Toast.makeText(
                         this@SMSenderActivity,
-                        "SMS: $smsId Status: ${newState.name}",
+                        "SMS: $smsId Status: ${newStatus.name}",
                         Toast.LENGTH_LONG
                     ).show()
                 }
             }
             Log.i(
                 "** $TAG",
-                "SMS: $smsId Part: $partNumber Total Parts: $totalParts Status: ${newState.name}"
+                "SMS: $smsId Part: $partNumber Total Parts: $totalParts Status: ${newStatus.name}"
             )
         }
     }

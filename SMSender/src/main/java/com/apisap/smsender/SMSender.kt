@@ -83,7 +83,7 @@ open class SMSender(private val context: Context) {
 
     private var policy: SMSenderPolicy = SMSenderPolicy()
 
-    private var smsStatusChangedCallback: ((smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit)? =
+    private var smsStatusChangedCallback: ((smsId: String, partNumber: Int, totalParts: Int, newStatus: SMStatus) -> Unit)? =
         null
 
     /**
@@ -201,7 +201,7 @@ open class SMSender(private val context: Context) {
      *
      * @return [Unit]
      */
-    fun onSMStatusChanged(smsStatusChangedCallback: (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit) {
+    fun onSMStatusChanged(smsStatusChangedCallback: (smsId: String, partNumber: Int, totalParts: Int, newStatus: SMStatus) -> Unit) {
         this.smsStatusChangedCallback = smsStatusChangedCallback
     }
 
