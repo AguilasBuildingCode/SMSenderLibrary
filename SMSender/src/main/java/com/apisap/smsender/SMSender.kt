@@ -60,15 +60,15 @@ private const val SMS_ATTEMPT_COUNTER_INTENT_EXTRA: String = "SMS_TRY_COUNTER_IN
  *
  * @param [context][Context]
  *
- * @property private [job][Job]
- * @property private [isSenderRunning][Boolean]
- * @property private [isSendingSMS][Boolean]
- * @property private [coroutineScope][CoroutineScope]
- * @property private [smsManager][SmsManager]
- * @property private [smsData][MutableMap]
- * @property private [smsStack][MutableList]
- * @property private [policy][SMSenderPolicy]
- * @property private [smsStatusChangedCallback] (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit
+ * @property [job][Job]
+ * @property [isSenderRunning][Boolean]
+ * @property [isSendingSMS][Boolean]
+ * @property [coroutineScope][CoroutineScope]
+ * @property [smsManager][SmsManager]
+ * @property [smsData][MutableMap]
+ * @property [smsStack][MutableList]
+ * @property [policy][SMSenderPolicy]
+ * @property [smsStatusChangedCallback] (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit
  *
  */
 open class SMSender(private val context: Context) {
@@ -94,8 +94,8 @@ open class SMSender(private val context: Context) {
             intent?.let { safeIntent ->
                 safeIntent.getStringExtra(SMS_ID_INTENT_EXTRA)?.let { smsId ->
                     val attemptCounter = safeIntent.getIntExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, 0)
-                    val partNumber = safeIntent.getIntExtra(SMS_PART_NUMBER_INTENT_EXTRA, 0)
-                    val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 0)
+                    val partNumber = safeIntent.getIntExtra(SMS_PART_NUMBER_INTENT_EXTRA, 1)
+                    val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 1)
                     when (resultCode) {
                         AppCompatActivity.RESULT_OK -> {
                             this@SMSender.smsStatusChangedCallback?.let {
@@ -125,7 +125,7 @@ open class SMSender(private val context: Context) {
                             smsStack.add(0, smsId)
                         }
                     }
-                    if (totalParts <= (partNumber + 1)) {
+                    if (totalParts <= partNumber) {
                         isSendingSMS = false
                         this@SMSender.context.unregisterReceiver(this)
                     }
@@ -142,8 +142,8 @@ open class SMSender(private val context: Context) {
             intent?.let { safeIntent ->
                 safeIntent.getStringExtra(SMS_ID_INTENT_EXTRA)?.let { smsId ->
                     val attemptCounter = safeIntent.getIntExtra(SMS_ATTEMPT_COUNTER_INTENT_EXTRA, 0)
-                    val partNumber = safeIntent.getIntExtra(SMS_PART_NUMBER_INTENT_EXTRA, 0)
-                    val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 0)
+                    val partNumber = safeIntent.getIntExtra(SMS_PART_NUMBER_INTENT_EXTRA, 1)
+                    val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 1)
                     when (resultCode) {
                         AppCompatActivity.RESULT_OK -> {
                             smsData.remove(smsId)
@@ -174,7 +174,7 @@ open class SMSender(private val context: Context) {
                             smsStack.add(0, smsId)
                         }
                     }
-                    if (totalParts <= (partNumber + 1)) {
+                    if (totalParts <= partNumber) {
                         isSendingSMS = false
                         this@SMSender.context.unregisterReceiver(this)
                     }
@@ -225,7 +225,7 @@ open class SMSender(private val context: Context) {
                 context, 0,
                 Intent(registerSendReceiver(smsData = "smsId-$smsId-attempt-$attempt-part-$index")).apply {
                     putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                    putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
+                    putExtra(SMS_PART_NUMBER_INTENT_EXTRA, (index + 1))
                     putExtra(
                         SMS_TOTAL_PARTS_INTENT_EXTRA,
                         multiPartSMSSize
@@ -302,7 +302,7 @@ open class SMSender(private val context: Context) {
                 context, 0,
                 Intent(registerDeliveryReceiver(smsData = "smsId-$smsId-attempt-$attempt-part-$index")).apply {
                     putExtra(SMS_ID_INTENT_EXTRA, smsId)
-                    putExtra(SMS_PART_NUMBER_INTENT_EXTRA, index)
+                    putExtra(SMS_PART_NUMBER_INTENT_EXTRA, (index + 1))
                     putExtra(
                         SMS_TOTAL_PARTS_INTENT_EXTRA,
                         multiPartSMSSize
@@ -371,7 +371,8 @@ open class SMSender(private val context: Context) {
             while (isSenderRunning) {
                 if (smsStack.isNotEmpty() and !isSendingSMS) {
                     isSendingSMS = true
-                    val smsId = smsStack.removeFirst()
+                    val smsId = smsStack[0]
+                    smsStack.removeAt(0)
                     smsData[smsId]?.let { (countryCode, number, message, multiPartSMS, attemptCounter): SMSData ->
                         try {
                             val destinationAddress = "+${countryCode.code}$number"
