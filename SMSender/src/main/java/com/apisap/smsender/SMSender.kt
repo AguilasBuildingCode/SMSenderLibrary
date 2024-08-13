@@ -9,8 +9,10 @@ import android.os.Build
 import android.telephony.SmsManager
 import androidx.appcompat.app.AppCompatActivity
 import com.apisap.smsender.countries.CountriesCodes
+import com.apisap.smsender.datas.SMSData
+import com.apisap.smsender.datas.SMSInfoData
+import com.apisap.smsender.interfaces.SMSInfo
 import com.apisap.smsender.policies.SMSenderPolicy
-import com.apisap.smsender.states.SMSData
 import com.apisap.smsender.states.SMStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +67,7 @@ private const val SMS_ATTEMPT_COUNTER_INTENT_EXTRA: String = "SMS_TRY_COUNTER_IN
  * @property [isSendingSMS][Boolean]
  * @property [coroutineScope][CoroutineScope]
  * @property [smsManager][SmsManager]
- * @property [smsData][MutableMap]
+ * @property [smsDataRef][MutableMap]
  * @property [smsStack][MutableList]
  * @property [policy][SMSenderPolicy]
  * @property [smsStatusChangedCallback] (smsId: String, partNumber: Int, totalParts: Int, newState: SMStatus) -> Unit
@@ -78,7 +80,7 @@ open class SMSender(private val context: Context) {
     private var isSendingSMS: Boolean = false
     private val coroutineScope by lazy { CoroutineScope(Job() + Dispatchers.IO) }
     private val smsManager: SmsManager by lazy { context.getSystemService(SmsManager::class.java) }
-    private val smsData: MutableMap<String, SMSData> = mutableMapOf()
+    private val smsDataRef: MutableMap<String, SMSData> = mutableMapOf()
     private val smsStack: MutableList<String> = mutableListOf()
 
     private var policy: SMSenderPolicy = SMSenderPolicy()
@@ -110,7 +112,7 @@ open class SMSender(private val context: Context) {
 
                         else -> {
                             if (attemptCounter >= policy.maxAttempts) {
-                                smsData.remove(smsId)
+                                smsDataRef.remove(smsId)
                                 this@SMSender.smsStatusChangedCallback?.let {
                                     it(
                                         smsId,
@@ -121,7 +123,7 @@ open class SMSender(private val context: Context) {
                                 }
                                 return
                             }
-                            smsData[smsId]?.attemptCounter = attemptCounter + 1
+                            smsDataRef[smsId]?.attemptCounter = attemptCounter + 1
                             smsStack.add(0, smsId)
                         }
                     }
@@ -146,7 +148,7 @@ open class SMSender(private val context: Context) {
                     val totalParts = safeIntent.getIntExtra(SMS_TOTAL_PARTS_INTENT_EXTRA, 1)
                     when (resultCode) {
                         AppCompatActivity.RESULT_OK -> {
-                            smsData.remove(smsId)
+                            smsDataRef.remove(smsId)
                             this@SMSender.smsStatusChangedCallback?.let {
                                 it(
                                     smsId,
@@ -159,7 +161,7 @@ open class SMSender(private val context: Context) {
 
                         else -> {
                             if (attemptCounter >= policy.maxAttempts) {
-                                smsData.remove(smsId)
+                                smsDataRef.remove(smsId)
                                 this@SMSender.smsStatusChangedCallback?.let {
                                     it(
                                         smsId,
@@ -170,7 +172,7 @@ open class SMSender(private val context: Context) {
                                 }
                                 return
                             }
-                            smsData[smsId]?.attemptCounter = attemptCounter + 1
+                            smsDataRef[smsId]?.attemptCounter = attemptCounter + 1
                             smsStack.add(0, smsId)
                         }
                     }
@@ -373,7 +375,7 @@ open class SMSender(private val context: Context) {
                     isSendingSMS = true
                     val smsId = smsStack[0]
                     smsStack.removeAt(0)
-                    smsData[smsId]?.let { (countryCode, number, message, multiPartSMS, attemptCounter): SMSData ->
+                    smsDataRef[smsId]?.let { (countryCode, number, message, multiPartSMS, attemptCounter): SMSData ->
                         try {
                             val destinationAddress = "+${countryCode.code}$number"
                             if (multiPartSMS.size > 1) {
@@ -432,29 +434,29 @@ open class SMSender(private val context: Context) {
      *
      * @throws IllegalArgumentException if number has more or less 10 digits.
      *
-     * @return uuid: [String]
+     * @return uuid: [SMSInfo]
      */
     fun sendSMS(
         countryCode: CountriesCodes,
         number: String,
         message: String,
-    ): String {
+    ): SMSInfoData {
         if (number.length != 10) {
             throw IllegalArgumentException("Param number should be 10 digits but given ${number.length} digits")
         }
         val uuid: String = UUID.randomUUID().toString()
-        try {
-            smsData[uuid] = SMSData(
-                countryCode = countryCode,
-                number = number,
-                message = message,
-                multiPartSMS = smsManager.divideMessage(message)
-            )
-        } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
-        }
+        val smsData = SMSData(
+            countryCode = countryCode,
+            number = number,
+            message = message,
+            multiPartSMS = smsManager.divideMessage(message)
+        )
+        smsDataRef[uuid] = smsData
         smsStack.add(uuid)
-        return uuid
+        return SMSInfoData(
+            smsId = uuid,
+            smsParts = smsData.multiPartSMS.size
+        )
     }
 
     /**
@@ -472,7 +474,7 @@ open class SMSender(private val context: Context) {
         countryCode: CountriesCodes,
         number: String,
         messages: List<String>,
-    ): List<String> {
+    ): List<SMSInfoData> {
         return messages.map { message -> sendSMS(countryCode, number, message) }
     }
 

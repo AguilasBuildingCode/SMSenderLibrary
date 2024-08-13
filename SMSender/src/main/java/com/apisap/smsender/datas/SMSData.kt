@@ -1,4 +1,4 @@
-package com.apisap.smsender.states
+package com.apisap.smsender.datas
 
 import com.apisap.smsender.countries.CountriesCodes
 
